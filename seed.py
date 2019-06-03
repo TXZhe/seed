@@ -71,7 +71,7 @@ def action(param):
             #SEED
             if net_work.check(seed, st):
                 real_st = net_work.get_real_st(st)
-                if seed_times < x and (!start or net_work(start and real_st - seed_last_st >= cd)):
+                if seed_times < x and ((not start) or (start and real_st - seed_last_st >= cd)):
                     start = True
                     seed_last_st = real_st
                     seed_times += 1
