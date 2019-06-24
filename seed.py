@@ -2,6 +2,8 @@ import multiprocessing as mp
 import random
 import numpy as np
 import tqdm
+import argparse
+from collections import defaultdict
 
 class NetWork():
     def __init__(self):
@@ -42,21 +44,26 @@ class NetWork():
 net_work = NetWork()
 beta = 0.05
 theta = 0.045
-alpha = 3
-avg = 20
+alpha = 5
+avg = 100
+x = 6
 usrnum = 10145
-x = 3
 
 
-def action(param):
-    seed, cd = param
-    r_num_avg = 0.0
+def action(seed, cd):
+    '''
+    Doing OSIR simulation
+    return differencial sequences
+    '''
     steps = net_work.get_steps()
-    fp = open("result\\%d_%d.tsv"%(seed, cd),"w")
-    for i in range(avg):
+    s_record = [[0 for j in range(steps)] for i in range(alpha)]
+    i_record = [0 for j in range(steps)]
+    r_record = [0 for j in range(steps)]
+    time_record = [0 for j in range(steps)]
+    for ii in range(avg):
         infected = set()
         recover = set()
-        info = {}
+        info = defaultdict(int)
         start = False
         seed_last_st = -1
         seed_times = 0
@@ -65,23 +72,29 @@ def action(param):
             if seed_times >= x and len(infected) == 0:
                 #print("%d_%d out in %d : %d"%(seed, cd, st, seed_times))
                 break
+            time_record[st] += 1
             #SEED
-            if net_work.check(seed, st):
+            if seed_times < x and net_work.check(seed, st):
                 real_st = net_work.get_real_st(st)
-                if seed_times < x and ((not start) or (start and real_st - seed_last_st >= cd)):
+                if ((not start) or (start and real_st - seed_last_st >= cd)):
+                    seed_last_st = real_st
                     seed_in = 1
                     start = True
-                    seed_last_st = real_st
                     seed_times += 1
                     ne = net_work.get_neighbor(seed, st)
                     for j in ne:
-                        if not j in infected and not j in recover:
-                            if not j in info:
-                                info[j] = 0
+                        if ((not j in infected) and (not j in recover)):
+                            s_record[info[j]][st][0] -= 1
+                            s_record[info[j]][st][1] += 1
                             info[j] += 1
                             if info[j] >= alpha:
                                 infected.add(j)
+                                i_record[st][0] += 1
+                                i_record[st][1] += 1
                                 info.pop(j)
+                            else:
+                                s_record[info[j]][st][0] += 1
+                                s_record[info[j]][st][0] += 1
             #Infected
             recoverd_i = set()
             new_i = set()
@@ -90,27 +103,33 @@ def action(param):
                     ne = net_work.get_neighbor(i_node, st)
                     for j in ne:
                         if j!=seed and random.uniform(0,1) < beta and\
-                            not j in infected and not j in recover:
-                            if not j in info:
-                                info[j] = 0
+                            not j in infected and not j in recover and not j in new_i:
+                            s_record[info[j]][st] -= 1
                             info[j] += 1
                             if info[j] >= alpha:
                                 new_i.add(j)
+                                i_record[st] += 1
                                 info.pop(j)
+                            else:
+                                s_record[info[j]][st] += 1
                 #Recover
                 if random.uniform(0,1) < theta:
                     recoverd_i.add(i_node)
+                    i_record[st] -= 1
                     recover.add(i_node)
+                    r_record[st] += 1
             infected = infected - recoverd_i
             infected = infected | new_i
             if len(infected) + len(recover) >= usrnum:
                 break
-            print("%d\t%d\t%d\t%d"%(st, len(infected), len(recover), seed_in), file=fp)
-        print("Final %d"%(len(infected) + len(recover)), file=fp)
-        r_num_avg += float(len(infected)+len(recover)) / avg
-    fp.close()
-    return r_num_avg
+        print("Round(%d/%d): Final %d"%(ii, avg, len(infected) + len(recover)))
+    return s_record, i_record, r_record, time_record
 
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--p", type=int, default=0, help="Interval of source join the net work")
+parser.add_argument("--seed_num", type=int, default=50, help="Seeds number of this simulation")
+args = parser.parse_args()
 
 if __name__ == "__main__":
     #input NetWork
@@ -125,35 +144,54 @@ if __name__ == "__main__":
             st = int(st)
             net_work.add(u, v, t)
             net_work.add(v, u, t)
-    #seed = np.random.choice(usrnum, 50, replace=False)
-    seed = [i for i in range(usrnum)]
+    seeds = np.random.choice(usrnum, args.seed_num), replace=False)
     #seed = [4]
-    param = []
-    for i in seed:
-        param.append([i, 0])
-        param.append([i, 8])
-        param.append([i, 56])
-    #resluts = list(tqdm.tqdm(mp.Pool(mp.cpu_count()).imap(action, param), ncols=25, desc="simu"))
-    resluts = []
-    for i in tqdm.tqdm(param, ncols=25):
-        resluts.append(action(i))
 
-    tots = {}
-    totcal = {0:0.0, 8:0.0, 56:0.0}
-    totnum = 0
-    with open("results.tsv",'w') as fout:
-        for indx, se in enumerate(param):
-            print("%d\t%d\t%f"%(se[0],se[1],resluts[indx]), file=fout)
-            if not se[0] in tots:
-                tots[se[0]] = {0:0.0, 8:0.0, 56:0.0}
-            tots[se[0]][se[1]] = resluts[indx]
-        for i in tots:
-            if tots[i][0]!=0 and tots[i][8]!=0 and tots[i][56]!=0:
-                totnum+=1
-                totcal[0]+=tots[i][0]
-                totcal[8]+=tots[i][8]
-                totcal[56]+=tots[i][56]
-        print("tot:", file=fout)
-        for i in totcal:
-            totcal[i]/=totnum
-            print("%d\t%f"%(i, totcal[i]), file=fout)
+    print("Start simulation--------")
+    for one_seed in seeds:
+        s_record, i_record, r_record, time_record = action(one_seed, args.p)
+
+        x = [0]
+        y_s = [[] in range(alpha)]
+        y_i = [0]
+        y_r = [0]
+        y_s[0].append(usrnum)
+        for i in range(1, alpha):
+            y_s[0].append(0)
+        for indx, ts in enumerate(time_record):
+            if ts == 0:
+                break
+            i = indx + 1
+            for j in range(alpha):
+                y_s[j].append(y_s[j][-1] + s_record[j][indx])
+            y_i.append(y_i[-1] + i_record[indx])
+            y_r.append(y_r[-1] + r_record[indx])
+
+        #output to file
+        fp = open("result_%d_%d.txt"%(one_seed, args.p),'w')
+        for i in y_s:
+            tmp = [str(j) for j in i]
+            print(' '.join(tmp), file = fp)
+        tmp = [str(j) for j in y_i]
+        print(' '.join(tmp), file = fp)
+        tmp = [str(j) for j in y_r]
+        print(' '.join(tmp), file = fp)
+
+        #plot
+        s_color = [(55,126,184),(77,175,74),(152,78,163),(225,225,51),(166,86,40)]
+        s_color = [(i[0]/256,i[1]/256,i[2]/256) for i in s_color]
+        s_mk = ['o','v','^','<','>']
+        i_color = (228/256,26/256,28/256)
+        i_mk = 's'
+        r_color = (247/256,129/256,191/256)
+        r_mk = 'p'
+        for indx, y in enumerate(y_s):
+            plt.plot(x, y, label="S_"+str(indx), marker=s_mk[indx%(len(s_color))], color=s_color[indx%(len(s_color))])
+        plt.plot(x, self.r_I, label="I", marker=i_mk, color=i_color)
+        plt.plot(x, self.r_R, label="R", marker=r_mk, color=r_color)
+        #ax.plot(x, self.r_sum, label="SUM", marker='o')
+        plt.xlabel("time step")
+        plt.ylabel("the number of nodes")
+        plt.legend(loc=2, bbox_to_anchor=(1.05,1.0),borderaxespad = 0.)
+        plt.savefig("pic_%d_%d.png"%(one_seed, args.p))
+        plt.close()
