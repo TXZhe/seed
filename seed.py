@@ -4,6 +4,7 @@ import numpy as np
 import tqdm
 import argparse
 from collections import defaultdict
+from matplotlib import pyplot as plt
 
 class NetWork():
     def __init__(self):
@@ -42,12 +43,12 @@ class NetWork():
 
 
 net_work = NetWork()
-beta = 0.05
-theta = 0.045
+beta = 0.1
+theta = 0.06
 alpha = 5
-avg = 100
-x = 6
-usrnum = 10145
+avg = 1
+x = 15
+usrnum = 100
 
 
 def action(seed, cd):
@@ -56,10 +57,10 @@ def action(seed, cd):
     return differencial sequences
     '''
     steps = net_work.get_steps()
-    s_record = [[0 for j in range(steps)] for i in range(alpha)]
-    i_record = [0 for j in range(steps)]
-    r_record = [0 for j in range(steps)]
-    time_record = [0 for j in range(steps)]
+    s_record = [[0 for j in range(len(steps))] for i in range(alpha)]
+    i_record = [0 for j in range(len(steps))]
+    r_record = [0 for j in range(len(steps))]
+    time_record = [0 for j in range(len(steps))]
     for ii in range(avg):
         infected = set()
         recover = set()
@@ -84,17 +85,14 @@ def action(seed, cd):
                     ne = net_work.get_neighbor(seed, st)
                     for j in ne:
                         if ((not j in infected) and (not j in recover)):
-                            s_record[info[j]][st][0] -= 1
-                            s_record[info[j]][st][1] += 1
+                            s_record[info[j]][st] -= 1
                             info[j] += 1
                             if info[j] >= alpha:
                                 infected.add(j)
-                                i_record[st][0] += 1
-                                i_record[st][1] += 1
+                                i_record[st] += 1
                                 info.pop(j)
                             else:
-                                s_record[info[j]][st][0] += 1
-                                s_record[info[j]][st][0] += 1
+                                s_record[info[j]][st] += 1
             #Infected
             recoverd_i = set()
             new_i = set()
@@ -133,6 +131,7 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
     #input NetWork
+    '''
     with open("E:\\data\\FDUwifi13\\FudanWiFi_train_MEET_st.csv","r") as fin:
     #with open("E:\\data\\FDUwifi13\\FudanWiFi_test_MEET_st.csv","r") as fin:
         for line in tqdm.tqdm(fin.readlines(), ncols=25, desc="read"):
@@ -144,28 +143,42 @@ if __name__ == "__main__":
             st = int(st)
             net_work.add(u, v, t)
             net_work.add(v, u, t)
-    seeds = np.random.choice(usrnum, args.seed_num), replace=False)
-    #seed = [4]
+    '''
+    with open("edge_st.csv","r") as fin:
+    #with open("E:\\data\\FDUwifi13\\FudanWiFi_test_MEET_st.csv","r") as fin:
+        for line in tqdm.tqdm(fin.readlines(), ncols=25, desc="read"):
+            t,u,v = line.strip().split(',')
+            u = int(u)
+            v = int(v)
+            t = int(t)
+            net_work.add(u, v, t)
+            net_work.add(v, u, t)
+
+    #seeds = list(np.random.choice(usrnum, args.seed_num, replace=False))
+    seeds = [75]
+    print(seeds)
+
 
     print("Start simulation--------")
     for one_seed in seeds:
+        print("Seed:%d"%(one_seed))
         s_record, i_record, r_record, time_record = action(one_seed, args.p)
 
-        x = [0]
-        y_s = [[] in range(alpha)]
+        x_a = [0]
+        y_s = [[] for i in range(alpha)]
         y_i = [0]
         y_r = [0]
         y_s[0].append(usrnum)
         for i in range(1, alpha):
-            y_s[0].append(0)
+            y_s[i].append(0)
         for indx, ts in enumerate(time_record):
             if ts == 0:
                 break
-            i = indx + 1
+            x_a.append(x_a[-1]+1)
             for j in range(alpha):
-                y_s[j].append(y_s[j][-1] + s_record[j][indx])
-            y_i.append(y_i[-1] + i_record[indx])
-            y_r.append(y_r[-1] + r_record[indx])
+                y_s[j].append(y_s[j][-1] + s_record[j][indx]/ts)
+            y_i.append(y_i[-1] + i_record[indx]/ts)
+            y_r.append(y_r[-1] + r_record[indx]/ts)
 
         #output to file
         fp = open("result_%d_%d.txt"%(one_seed, args.p),'w')
@@ -186,12 +199,13 @@ if __name__ == "__main__":
         r_color = (247/256,129/256,191/256)
         r_mk = 'p'
         for indx, y in enumerate(y_s):
-            plt.plot(x, y, label="S_"+str(indx), marker=s_mk[indx%(len(s_color))], color=s_color[indx%(len(s_color))])
-        plt.plot(x, self.r_I, label="I", marker=i_mk, color=i_color)
-        plt.plot(x, self.r_R, label="R", marker=r_mk, color=r_color)
+            plt.plot(x_a, y, label="S_"+str(indx), marker=s_mk[indx%(len(s_color))], color=s_color[indx%(len(s_color))])
+        plt.plot(x_a, y_i, label="I", marker=i_mk, color=i_color)
+        plt.plot(x_a, y_r, label="R", marker=r_mk, color=r_color)
         #ax.plot(x, self.r_sum, label="SUM", marker='o')
         plt.xlabel("time step")
         plt.ylabel("the number of nodes")
         plt.legend(loc=2, bbox_to_anchor=(1.05,1.0),borderaxespad = 0.)
+        plt.tight_layout()
         plt.savefig("pic_%d_%d.png"%(one_seed, args.p))
         plt.close()
